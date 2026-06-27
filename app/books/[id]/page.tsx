@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
   ChevronLeft, ChevronRight, MessageCircle, X,
-  ChevronDown, Heart, Send
+  ChevronDown, Heart, Send, Sparkles
 } from "lucide-react"
 import { getBook, getChapter, updateBookProgress, streamDiscussBook, getDiscussionHistory } from "@/lib/api"
 import type { Book, ChapterContent } from "@/lib/types"
@@ -138,6 +138,39 @@ export default function ReaderPage() {
 
   // 同步 chatOpen ref，避免闭包过期
   useEffect(() => { chatOpenRef.current = chatOpen }, [chatOpen])
+
+  // 提炼记忆：将当前讨论发送到 /remember
+  async function handleExtractMemory() {
+    if (chatMsgs.length === 0) return
+    try {
+      toast.loading("提取中...")
+      const res = await fetch(`${"/api/backend"}/remember`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          history: chatMsgs
+            .filter((m) => m.role !== "system")
+            .map((m) => ({ role: m.role, content: m.content })),
+        }),
+      })
+      toast.dismiss()
+      if (res.ok) {
+        const data = await res.json()
+        if (data.processing) {
+          toast.success("已提交，提取中 ✧")
+        } else if (data.pending) {
+          toast.success(`已提取 ${data.count} 条，待审核 ✧`)
+        } else {
+          toast.success(data.saved ? "记住了 ✧" : "没有新内容")
+        }
+      } else {
+        toast.error("提取失败")
+      }
+    } catch {
+      toast.dismiss()
+      toast.error("提取失败")
+    }
+  }
 
   // 发送聊天
   async function handleChatSend() {
@@ -284,9 +317,21 @@ export default function ReaderPage() {
         >
           {/* 聊天顶栏 */}
           <div className="flex items-center justify-between border-b border-border/30 px-4 py-2.5">
-            <span className="text-xs font-medium text-foreground">
-              💬 和砚迟聊剧情
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-foreground">
+                💬 聊剧情
+              </span>
+              {chatMsgs.filter((m) => m.role !== "system").length >= 2 && (
+                <button
+                  onClick={handleExtractMemory}
+                  className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:text-[#c4a87a] hover:bg-[#c4a87a]/10 transition-colors"
+                  title="从讨论中提炼记忆"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  提炼
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {chapterContent && (
                 <span className="text-[10px] text-muted-foreground/50">
