@@ -62,13 +62,13 @@ export default function SettingsPage() {
   async function handleSave() {
     setSaving(true)
     try {
-      // 过滤掉脱敏的 key（避免把 "sk-dd33d...914f" 这种存回去）
+      // 脱敏的 key 不发送（避免覆写后端存储的真实 key）
       const payload = { ...settings }
       if (payload.api_key && payload.api_key.includes("...")) {
-        payload.api_key = ""
+        delete payload.api_key
       }
       if (payload.qwen_api_key && payload.qwen_api_key.includes("...")) {
-        payload.qwen_api_key = ""
+        delete payload.qwen_api_key
       }
       await updateSettings(payload)
       toast.success("设置已保存")
@@ -152,6 +152,21 @@ export default function SettingsPage() {
               </option>
             ))}
           </select>
+        </section>
+
+        {/* 天气城市 */}
+        <section>
+          <h2 className="mb-3 text-sm font-medium text-muted-foreground">天气城市</h2>
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">城市名称（用于首页天气显示）</label>
+            <input
+              type="text"
+              value={settings.weather_location || ""}
+              onChange={(e) => setSettings({ ...settings, weather_location: e.target.value })}
+              placeholder="例如：上海、北京… 留空自动定位"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-ring focus:outline-none"
+            />
+          </div>
         </section>
 
         {/* 思考模式 */}

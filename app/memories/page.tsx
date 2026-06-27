@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ArrowLeft, BookMarked, Sparkles, MessageSquare, FileText, Search, Star, Check, X, Pencil, Trash2, Clock } from "lucide-react"
+import { ArrowLeft, BookMarked, Sparkles, MessageSquare, FileText, Search, Star, Check, X, Pencil, Trash2, Clock, CheckSquare, Square } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -37,6 +37,7 @@ interface ConfirmedMemory {
   date: string
   content: string
   createdAt: string
+  favorite?: boolean
 }
 
 export default function MemoriesPage() {
@@ -61,6 +62,10 @@ export default function MemoriesPage() {
   const [memoryFilter, setMemoryFilter] = useState<string>("all")
   const [memorySearch, setMemorySearch] = useState("")
   const [editingCategory, setEditingCategory] = useState<string | null>(null)
+  const [editingContent, setEditingContent] = useState<string | null>(null)
+  const [editContentText, setEditContentText] = useState("")
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadTimeline()
@@ -178,6 +183,7 @@ export default function MemoriesPage() {
       })
       if (!res.ok) return
       const result = await res.json()
+      setSelectedItem((prev) => prev && prev.id === item.id ? { ...prev, highlighted: result.highlighted } : prev)
       setData((prev) => {
         if (!prev) return prev
         const update = (items: TimelineItem[]) =>
@@ -334,7 +340,9 @@ export default function MemoriesPage() {
 
     // 筛选逻辑
     let filtered = confirmedMemories
-    if (memoryFilter !== "all") {
+    if (memoryFilter === "favorites") {
+      filtered = filtered.filter((m) => m.favorite)
+    } else if (memoryFilter !== "all") {
       filtered = filtered.filter((m) => m.category === memoryFilter)
     }
     if (memorySearch.trim()) {
@@ -355,22 +363,65 @@ export default function MemoriesPage() {
       )
     }
 
-    const categories = ["all", "喜好与习惯", "承诺与约定", "关系里程碑", "亲密", "日常", "其他"]
-    const catCount = (cat: string) =>
-      cat === "all" ? confirmedMemories.length : confirmedMemories.filter((m) => m.category === cat).length
+    const categories = ["all", "favorites", "喜好与习惯", "承诺与约定", "关系里程碑", "亲密", "日常", "其他"]
+    const catCount = (cat: string) => {
+      if (cat === "all") return confirmedMemories.length
+      if (cat === "favorites") return confirmedMemories.filter((m) => m.favorite).length
+      return confirmedMemories.filter((m) => m.category === cat).length
+    }
 
     return (
       <div className="space-y-2">
-        {/* 搜索 */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
-          <input
-            value={memorySearch}
-            onChange={(e) => setMemorySearch(e.target.value)}
-            placeholder="搜索记忆……"
-            className="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:border-ring focus:outline-none"
-          />
+        {/* 搜索 + 选择模式 */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
+            <input
+              value={memorySearch}
+              onChange={(e) => setMemorySearch(e.target.value)}
+              placeholder="搜索记忆……"
+              className="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:border-ring focus:outline-none"
+            />
+          </div>
+          <button
+            onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()) }}
+            className={cn(
+              "shrink-0 rounded-lg border px-2.5 py-2 text-xs transition-colors",
+              selectMode
+                ? "border-[#c4a87a] bg-[#c4a87a]/10 text-[#c4a87a]"
+                : "border-border text-muted-foreground hover:bg-muted"
+            )}
+          >
+            <CheckSquare className="h-3.5 w-3.5" />
+          </button>
         </div>
+
+        {/* 批量删除栏 */}
+        {selectMode && selectedIds.size > 0 && (
+          <div className="flex items-center justify-between rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
+            <span className="text-xs text-red-500">已选 {selectedIds.size} 条</span>
+            <button
+              onClick={async () => {
+                if (!confirm(`确定删除选中的 ${selectedIds.size} 条记忆？`)) return
+                try {
+                  const res = await fetch(`${API_BASE}/api/memory/batch-delete`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ids: Array.from(selectedIds) }),
+                  })
+                  if (res.ok) {
+                    toast.success(`已删除 ${selectedIds.size} 条`)
+                    setConfirmedMemories((prev) => prev.filter((m) => !selectedIds.has(m.id)))
+                    setSelectedIds(new Set())
+                    setSelectMode(false)
+                  }
+                } catch { toast.error("批量删除失败") }
+              }}
+              className="rounded-lg bg-red-500 px-3 py-1 text-xs text-white hover:bg-red-600 transition-colors"
+            >
+              <Trash2 className="h-3 w-3 inline-block mr-1" />删除选中
+            </button>
+          </div>
+        )}
 
         {/* 分类筛选 */}
         <div className="flex gap-1 overflow-x-auto pb-1 scroll-smooth snap-x snap-mandatory">
@@ -387,7 +438,7 @@ export default function MemoriesPage() {
                   : "text-muted-foreground/60 hover:bg-muted"
               )}
             >
-              {cat === "all" ? "全部" : cat}
+              {cat === "all" ? "全部" : cat === "favorites" ? "⭐ 收藏" : cat}
               <span className="ml-1 opacity-60">{catCount(cat)}</span>
             </button>
           ))}
@@ -406,10 +457,27 @@ export default function MemoriesPage() {
             className="rounded-xl border border-border/50 bg-card p-3 space-y-1.5"
           >
             <div className="flex items-center gap-2">
+              {/* 多选复选框 */}
+              {selectMode && (
+                <button
+                  onClick={() => {
+                    const next = new Set(selectedIds)
+                    if (next.has(mem.id)) next.delete(mem.id)
+                    else next.add(mem.id)
+                    setSelectedIds(next)
+                  }}
+                  className="shrink-0"
+                >
+                  {selectedIds.has(mem.id)
+                    ? <CheckSquare className="h-4 w-4 text-[#c4a87a]" />
+                    : <Square className="h-4 w-4 text-muted-foreground/40" />
+                  }
+                </button>
+              )}
               {/* 分类标签（可点击修改） */}
               <div className="relative">
                 <button
-                  onClick={() => setEditingCategory(editingCategory === mem.id ? null : mem.id)}
+                  onClick={() => { if (!selectMode) setEditingCategory(editingCategory === mem.id ? null : mem.id) }}
                   className={cn("rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors hover:opacity-80", memoryCategoryColor(mem.category))}
                 >
                   {mem.category} ✎
@@ -447,10 +515,80 @@ export default function MemoriesPage() {
                   </div>
                 )}
               </div>
+              {/* 收藏按钮 */}
+              <button
+                onClick={async () => {
+                  const newVal = !mem.favorite
+                  try {
+                    const res = await fetch(`${API_BASE}/api/memory/favorite`, {
+                      method: "POST", headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ id: mem.id, favorite: newVal }),
+                    })
+                    if (res.ok) {
+                      setConfirmedMemories((prev) =>
+                        prev.map((m) => (m.id === mem.id ? { ...m, favorite: newVal } : m))
+                      )
+                    }
+                  } catch {}
+                }}
+                className="ml-auto"
+              >
+                <Star className={cn("h-3.5 w-3.5",
+                  mem.favorite ? "fill-[#c4a87a] text-[#c4a87a]" : "text-muted-foreground/30 hover:text-[#c4a87a]"
+                )} />
+              </button>
               <span className="text-[10px] text-muted-foreground/40">{mem.date}</span>
             </div>
-            <p className="text-xs text-foreground/80 leading-relaxed">{mem.content}</p>
-            <div className="flex items-center gap-1.5 pt-0.5">
+            {/* 内容（可编辑） */}
+            {editingContent === mem.id ? (
+              <textarea
+                value={editContentText}
+                onChange={(e) => setEditContentText(e.target.value)}
+                className="w-full rounded-lg border border-input bg-background p-2 text-xs text-foreground focus:border-ring focus:outline-none resize-none"
+                rows={3}
+              />
+            ) : (
+              <p className="text-xs text-foreground/80 leading-relaxed">{mem.content}</p>
+            )}
+            <div className="flex items-center gap-1.5 pt-1">
+              {editingContent === mem.id ? (
+                <>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`${API_BASE}/api/memory/edit`, {
+                          method: "POST", headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id: mem.id, content: editContentText.trim() }),
+                        })
+                        if (res.ok) {
+                          setConfirmedMemories((prev) =>
+                            prev.map((m) => (m.id === mem.id ? { ...m, content: editContentText.trim() } : m))
+                          )
+                          toast.success("内容已更新")
+                        }
+                      } catch { toast.error("更新失败") }
+                      setEditingContent(null)
+                      setEditContentText("")
+                    }}
+                    className="rounded-lg px-2.5 py-1 text-xs text-green-600 bg-green-500/10 hover:bg-green-500/20 transition-colors"
+                  >
+                    <Check className="h-3 w-3 inline-block mr-0.5" /> 保存
+                  </button>
+                  <button
+                    onClick={() => { setEditingContent(null); setEditContentText("") }}
+                    className="rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-muted transition-colors"
+                  >
+                    <X className="h-3 w-3 inline-block mr-0.5" /> 取消
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => { setEditingContent(mem.id); setEditContentText(mem.content) }}
+                  className="rounded-lg px-2 py-1 text-xs text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <Pencil className="h-3 w-3 inline-block mr-0.5" /> 编辑
+                </button>
+              )}
               <button
                 onClick={async () => {
                   if (!confirm("确定删除这条记忆？")) return
@@ -594,17 +732,31 @@ export default function MemoriesPage() {
             <div className="rounded-xl border border-border/50 bg-card p-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-medium text-foreground">{selectedItem.title}</h2>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleDeleteMemory(selectedItem.id)
-                    setSelectedItem(null)
-                  }}
-                  className="rounded-lg p-1 text-muted-foreground/50 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                  title="删除"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleHighlight(selectedItem, e) }}
+                    className={cn(
+                      "rounded-lg p-1.5 transition-colors",
+                      selectedItem.highlighted
+                        ? "text-[#c4a87a]"
+                        : "text-muted-foreground/50 hover:text-[#c4a87a]"
+                    )}
+                    title={selectedItem.highlighted ? "取消精选" : "标记精选"}
+                  >
+                    <Star className={cn("h-4 w-4", selectedItem.highlighted && "fill-[#c4a87a]")} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteMemory(selectedItem.id)
+                      setSelectedItem(null)
+                    }}
+                    className="rounded-lg p-1 text-muted-foreground/50 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                    title="删除"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
               {selectedItem.date && (
                 <p className="mt-1 text-[10px] text-muted-foreground/40">

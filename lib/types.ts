@@ -43,6 +43,7 @@ export interface Settings {
   qwen_api_key: string
   qwen_base_url: string
   qwen_vl_model: string
+  weather_location: string
 }
 
 // ===== 流式响应 (NDJSON: {"t":"...","d":"..."}) =====

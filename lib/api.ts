@@ -123,6 +123,23 @@ export async function generateTodayNote(history: { role: string; content: string
   return data.note || data.content || ""
 }
 
+// ===== 首页 =====
+
+export interface HomeData {
+  daysTogether: number
+  startDate: string
+  todayNote: string | null
+  hasTodayNote: boolean
+  weather: string | null
+  weatherCity: string | null
+}
+
+export async function getHomeData(): Promise<HomeData> {
+  const res = await fetch(`${API_BASE}/api/home`)
+  if (!res.ok) throw new Error("获取首页数据失败")
+  return res.json()
+}
+
 // ===== 时间线 =====
 
 export async function getTimeline(): Promise<{ items: { id: string; title: string; content: string; date: string; type: string }[] }> {
