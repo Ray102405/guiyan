@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ArrowLeft, BookMarked, Sparkles, MessageSquare, FileText, Search, Star, Check, X, Pencil, Trash2, Clock, CheckSquare, Square } from "lucide-react"
+import { ArrowLeft, BookMarked, Sparkles, MessageSquare, FileText, Search, Star, Check, X, Pencil, Trash2, Clock, CheckSquare, Square, BookOpen } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -19,6 +19,7 @@ interface TimelineItem {
 interface TimelineData {
   chats: TimelineItem[]
   notes: TimelineItem[]
+  discussions: TimelineItem[]
   highlights: TimelineItem[]
 }
 
@@ -44,7 +45,7 @@ export default function MemoriesPage() {
   const router = useRouter()
   const [data, setData] = useState<TimelineData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<"highlights" | "chats" | "notes" | "review" | "memorybank">("highlights")
+  const [tab, setTab] = useState<"highlights" | "chats" | "notes" | "discussions" | "review" | "memorybank">("highlights")
   const [selectedItem, setSelectedItem] = useState<TimelineItem | null>(null)
   const [itemContent, setItemContent] = useState("")
   const [contentLoading, setContentLoading] = useState(false)
@@ -614,7 +615,7 @@ export default function MemoriesPage() {
     )
   }
 
-  // ══ 时间线 tab（精选/历史/笔记）═════════════════════
+  // ══ 时间线 tab（精选/历史/笔记/读书）═════════════════════
   function getItems(): TimelineItem[] {
     if (!data) return []
     switch (tab) {
@@ -624,6 +625,8 @@ export default function MemoriesPage() {
         return data.chats
       case "notes":
         return data.notes
+      case "discussions":
+        return data.discussions
       default:
         return []
     }
@@ -687,6 +690,7 @@ export default function MemoriesPage() {
           { key: "highlights" as const, label: "精选", icon: Sparkles },
           { key: "chats" as const, label: "历史", icon: MessageSquare },
           { key: "notes" as const, label: "笔记", icon: FileText },
+          { key: "discussions" as const, label: "读书", icon: BookOpen },
           { key: "review" as const, label: "待审核", icon: Clock },
           { key: "memorybank" as const, label: "记忆库", icon: BookMarked },
         ].map((t) => (
@@ -704,6 +708,15 @@ export default function MemoriesPage() {
             {t.label}
             {t.key === "highlights" && data?.highlights && (
               <span className="ml-0.5 text-[10px] opacity-60">{data.highlights.length}</span>
+            )}
+            {t.key === "chats" && data?.chats && (
+              <span className="ml-0.5 text-[10px] opacity-60">{data.chats.length}</span>
+            )}
+            {t.key === "notes" && data?.notes && (
+              <span className="ml-0.5 text-[10px] opacity-60">{data.notes.length}</span>
+            )}
+            {t.key === "discussions" && data?.discussions && (
+              <span className="ml-0.5 text-[10px] opacity-60">{data.discussions.length}</span>
             )}
             {t.key === "review" && pendingMemories.length > 0 && (
               <span className="ml-0.5 bg-[#c4a87a] text-white rounded-full h-4 min-w-[16px] flex items-center justify-center text-[9px] px-1">
