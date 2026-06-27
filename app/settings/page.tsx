@@ -92,7 +92,7 @@ export default function SettingsPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border/50 px-4 py-3">
+      <div className="flex items-center gap-3 border-b border-border/50 px-4 pt-[env(safe-area-inset-top,12px)] pb-3">
         <button
           onClick={() => router.back()}
           className="rounded-lg p-1 text-muted-foreground hover:bg-muted"

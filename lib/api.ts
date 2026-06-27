@@ -1,6 +1,6 @@
 import type { Settings, SessionListItem, SessionDetail, StreamChunk } from "./types"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:2612"
+const API_BASE = "/api/backend"
 
 // 生成 session id（和服务端一致）
 export function generateSessionId(): string {

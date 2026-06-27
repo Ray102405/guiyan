@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Plus, MessageCircle, Trash2, ChevronLeft, ChevronDown, Bookmark, PenSquare, Download } from "lucide-react"
+import { Plus, MessageCircle, Trash2, ChevronLeft, ChevronDown, Sparkle, PenSquare, Download } from "lucide-react"
 import { Message } from "@/components/chat/message"
 import { InputBar } from "@/components/chat/input-bar"
 import type { AttachedFile } from "@/components/chat/input-bar"
@@ -45,6 +45,7 @@ export default function ChatPage() {
   const lastSuggestRef = useRef(0)
   const suggestTimerRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const msgCountRef = useRef(0)
+  const proactiveSeenRef = useRef<string>("") // 已展示的主动消息 ID
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -75,6 +76,46 @@ export default function ChatPage() {
   useEffect(() => {
     if (!currentId) { setMessages([]); return }
     loadSessionMessages(currentId)
+  }, [currentId])
+
+  // 砚迟主动消息轮询（每 60 秒检查一次）
+  useEffect(() => {
+    if (!currentId) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${"/api/backend"}/api/proactive/check`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (!data.message) return
+        // 避免重复插入同一条
+        if (proactiveSeenRef.current === data.message) return
+        proactiveSeenRef.current = data.message
+        // 通过 Service Worker 发通知（PWA 模式，手机也支持）
+        if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: "proactive",
+            text: data.message,
+          })
+        } else if ("Notification" in window && Notification.permission === "granted") {
+          // 降级：直接通知
+          new Notification("砚迟", { body: data.message, icon: "/icons/icon-192.png?v=2" })
+        } else if ("Notification" in window && Notification.permission !== "denied") {
+          Notification.requestPermission()
+        }
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `proactive-${Date.now()}`,
+            role: "assistant",
+            content: `✨ ${data.message}`,
+            timestamp: new Date().toISOString(),
+          },
+        ])
+        // 标记已读
+        fetch(`${"/api/backend"}/api/proactive/mark-seen`, { method: "POST" }).catch(() => {})
+      } catch { /* 静默失败 */ }
+    }, 60000)
+    return () => clearInterval(interval)
   }, [currentId])
 
   async function initSessions() {
@@ -218,8 +259,8 @@ export default function ChatPage() {
   async function handleManualRemember() {
     if (messages.length === 0) return
     try {
-      toast.loading("记住了...")
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:2612"}/remember`, {
+      toast("提取中，稍后查看待审核 ✧")
+      const res = await fetch(`${"/api/backend"}/remember`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -227,13 +268,21 @@ export default function ChatPage() {
         }),
       })
       toast.dismiss()
+      toast.dismiss()
       if (res.ok) {
         const data = await res.json()
-        toast.success(data.saved ? "记住了 ✧" : "没有新内容")
+        if (data.processing) {
+          toast.success("已提交，提取中 ✧")
+        } else if (data.pending) {
+          toast.success(`已提取 ${data.count} 条，待审核 ✧`)
+        } else {
+          toast.success(data.saved ? "记住了 ✧" : "没有新内容")
+        }
       } else {
         toast.error("记住失败")
       }
     } catch {
+      toast.dismiss()
       toast.error("记住失败")
     }
   }
@@ -242,7 +291,7 @@ export default function ChatPage() {
     if (messages.length === 0) return
     try {
       toast.loading("砚迟在写日记...")
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:2612"}/api/today-note`, {
+      const res = await fetch(`${"/api/backend"}/api/today-note`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -303,7 +352,7 @@ export default function ChatPage() {
 
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:2612"}/chat/stream`,
+        `${"/api/backend"}/chat/stream`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -437,7 +486,7 @@ export default function ChatPage() {
     setShowSuggest(false)
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:2612"}/remember`,
+        `${"/api/backend"}/remember`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -448,7 +497,11 @@ export default function ChatPage() {
       )
       if (res.ok) {
         const data = await res.json()
-        toast.success(data.saved ? "记住了 ✧" : "没有新内容")
+        if (data.processing) {
+          toast.success("已提交，提取中 ✧")
+        } else {
+          toast.success(data.pending ? "已提取，待审核 ✧" : data.saved ? "记住了 ✧" : "没有新内容")
+        }
       }
     } catch {
       toast.error("记忆失败")
@@ -531,7 +584,7 @@ export default function ChatPage() {
       {/* Main chat */}
       <div className="flex flex-1 flex-col">
         {/* Top bar */}
-        <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border/50 px-4 pt-[env(safe-area-inset-top,12px)] pb-3">
           <button onClick={() => setSidebarOpen(true)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
             <ChevronLeft className="h-4 w-4" />
             <span>{sessions.find((s) => s.id === currentId)?.title || "归砚"}</span>
@@ -543,7 +596,7 @@ export default function ChatPage() {
                 className="rounded-lg p-1.5 text-muted-foreground hover:text-[#c4a87a] hover:bg-[#c4a87a]/10 transition-colors"
                 title="记住这段对话"
               >
-                <Bookmark className="h-4 w-4" />
+                <Sparkle className="h-4 w-4" />
               </button>
               <button
                 onClick={handleWriteNote}

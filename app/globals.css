@@ -112,6 +112,21 @@
   }
 }
 
+/* ===== 全局平滑滚动 ===== */
+html {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* snap 样式：分类筛选条 */
+.snap-x {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.snap-mandatory > * {
+  scroll-snap-align: start;
+}
+
 /* ===== 天蓝色 Apple 液态玻璃效果 ===== */
 .glass {
   background: var(--glass-bg);
@@ -174,17 +189,18 @@ body::after {
   opacity: 0.012;
 }
 
-/* ===== 滚动条 ===== */
-.scrollbar-thin::-webkit-scrollbar {
-  width: 4px;
+/* ===== 滚动条（全局统一细条） ===== */
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
 }
-.scrollbar-thin::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
   background: transparent;
 }
-.scrollbar-thin::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
   background: #2a2a2a;
   border-radius: 999px;
 }
-.light .scrollbar-thin::-webkit-scrollbar-thumb {
+.light ::-webkit-scrollbar-thumb {
   background: #d2d2d7;
 }
