@@ -80,7 +80,7 @@ export default function BooksPage() {
 
   return (
     <div className="flex h-full flex-col pt-[env(safe-area-inset-top,12px)]">
-      <div className="flex-1 overflow-y-auto px-5 pb-24">
+      <div className="flex-1 overflow-y-auto px-5 pb-28">
         {/* 顶部 */}
         <div className="flex items-center justify-between pt-5 pb-4">
           <div>

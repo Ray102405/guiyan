@@ -1,17 +1,17 @@
 "use client"
 
-import { useEffect, useState, useRef, useCallback } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
   ChevronLeft, ChevronRight, MessageCircle, X,
   ChevronDown, Heart, Send
 } from "lucide-react"
-import { getBook, getChapter, updateBookProgress, streamDiscussBook } from "@/lib/api"
+import { getBook, getChapter, updateBookProgress, streamDiscussBook, getDiscussionHistory } from "@/lib/api"
 import type { Book, ChapterContent } from "@/lib/types"
 import { toast } from "sonner"
 
 interface ChatMsg {
-  role: "user" | "assistant"
+  role: "user" | "assistant" | "system"
   content: string
 }
 
@@ -25,9 +25,11 @@ export default function ReaderPage() {
   const [chapterContent, setChapterContent] = useState<ChapterContent | null>(null)
   const [loading, setLoading] = useState(true)
   const [contentLoading, setContentLoading] = useState(false)
+  const visitedChaptersRef = useRef<Set<number>>(new Set())
 
   // 聊天相关
   const [chatOpen, setChatOpen] = useState(false)
+  const chatOpenRef = useRef(false)
   const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([])
   const [chatInput, setChatInput] = useState("")
   const [chatStreaming, setChatStreaming] = useState(false)
@@ -61,6 +63,10 @@ export default function ReaderPage() {
     try {
       const ch = await getChapter(bookId, idx)
       setChapterContent(ch)
+      // 加载当前章节的讨论历史（如果聊天面板开着）
+      if (chatOpenRef.current) {
+        loadChapterDiscussions(idx)
+      }
     } catch {
       toast.error("加载章节失败")
     } finally {
@@ -68,26 +74,54 @@ export default function ReaderPage() {
     }
   }
 
-  // 翻页
-  const goPrev = useCallback(() => {
-    if (chapterIndex > 0) {
-      const newIdx = chapterIndex - 1
-      setChapterIndex(newIdx)
-      loadChapter(newIdx)
-      saveProgress(newIdx)
-      setChatMsgs([]) // 切换章节清空聊天
+  async function loadChapterDiscussions(idx: number, isFirstLoad = false) {
+    try {
+      const hist = await getDiscussionHistory(bookId, idx)
+      if (hist.messages && hist.messages.length > 0) {
+        // 用章节分隔线标记历史归属
+        const chapter = book?.chapters?.[idx]
+        const separator: ChatMsg = {
+          role: "system",
+          content: `─── 第 ${idx + 1} 章${chapter ? " · " + chapter.title : ""}的讨论 ───`
+        }
+        const historyMsgs: ChatMsg[] = hist.messages as ChatMsg[]
+        setChatMsgs((prev) => {
+          // 如果已经加过这个章节的分隔线，不再重复
+          if (prev.some((m) => m.role === "system" && m.content === separator.content)) {
+            return prev
+          }
+          if (isFirstLoad) {
+            return [separator, ...historyMsgs]
+          }
+          return [...prev, separator, ...historyMsgs]
+        })
+      } else if (isFirstLoad) {
+        // 首次加载无历史，显示空状态
+        setChatMsgs([])
+      }
+    } catch {
+      // 安静失败
     }
-  }, [chapterIndex])
+  }
 
-  const goNext = useCallback(() => {
+  // 翻页（不用 useCallback 避免闭包过期）
+  function switchChapter(newIdx: number) {
+    if (newIdx === chapterIndex) return
+    setChapterIndex(newIdx)
+    loadChapter(newIdx)
+    saveProgress(newIdx)
+    visitedChaptersRef.current.add(newIdx)
+  }
+
+  function goPrev() {
+    if (chapterIndex > 0) switchChapter(chapterIndex - 1)
+  }
+
+  function goNext() {
     if (chapterContent && chapterIndex < chapterContent.totalChapters - 1) {
-      const newIdx = chapterIndex + 1
-      setChapterIndex(newIdx)
-      loadChapter(newIdx)
-      saveProgress(newIdx)
-      setChatMsgs([])
+      switchChapter(chapterIndex + 1)
     }
-  }, [chapterIndex, chapterContent])
+  }
 
   function saveProgress(chapter: number) {
     if (!book) return
@@ -101,6 +135,9 @@ export default function ReaderPage() {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
     }
   }, [chatMsgs, chatStreamContent])
+
+  // 同步 chatOpen ref，避免闭包过期
+  useEffect(() => { chatOpenRef.current = chatOpen }, [chatOpen])
 
   // 发送聊天
   async function handleChatSend() {
@@ -167,7 +204,7 @@ export default function ReaderPage() {
       </div>
 
       {/* 章节导航 + 内容 */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-thin">
+      <div className="flex-1 overflow-y-auto px-4 py-4 pb-20 scrollbar-thin">
         {/* 章节标题 + 导航按钮 */}
         {chapterContent && (
           <div className="mb-4 flex items-center justify-between">
@@ -230,8 +267,11 @@ export default function ReaderPage() {
       {/* 悬浮聊天按钮 */}
       {!chatOpen && (
         <button
-          onClick={() => setChatOpen(true)}
-          className="fixed bottom-6 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[#c4a87a] text-white shadow-lg transition-all hover:scale-105 hover:shadow-xl active:scale-95"
+          onClick={() => {
+            setChatOpen(true)
+            setTimeout(() => loadChapterDiscussions(chapterIndex, true), 100)
+          }}
+          className="fixed bottom-20 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[#c4a87a] text-white shadow-lg transition-all hover:scale-105 hover:shadow-xl active:scale-95"
         >
           <MessageCircle className="h-5 w-5" />
         </button>
@@ -239,8 +279,8 @@ export default function ReaderPage() {
 
       {/* 聊天面板 */}
       {chatOpen && (
-        <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col border-t border-border/50 glass-nav animate-in slide-in-from-bottom-full"
-          style={{ height: "min(400px, 50vh)" }}
+        <div className="fixed inset-x-0 z-50 flex flex-col border-t border-border/50 glass-nav animate-in slide-in-from-bottom-full"
+          style={{ height: "min(400px, 50vh)", bottom: "64px" }}
         >
           {/* 聊天顶栏 */}
           <div className="flex items-center justify-between border-b border-border/30 px-4 py-2.5">
@@ -275,19 +315,30 @@ export default function ReaderPage() {
                 </p>
               </div>
             )}
-            {chatMsgs.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${
-                    msg.role === "user"
-                      ? "bg-[#c4a87a] text-white rounded-br-md"
-                      : "bg-card border border-border/50 text-foreground rounded-bl-md"
-                  }`}
-                >
-                  {msg.content}
+            {chatMsgs.map((msg, i) => {
+              if (msg.role === "system") {
+                return (
+                  <div key={i} className="flex items-center gap-3 py-1">
+                    <div className="flex-1 h-px bg-border/30" />
+                    <span className="text-[10px] text-muted-foreground/40 shrink-0 whitespace-nowrap">{msg.content}</span>
+                    <div className="flex-1 h-px bg-border/30" />
+                  </div>
+                )
+              }
+              return (
+                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${
+                      msg.role === "user"
+                        ? "bg-[#c4a87a] text-white rounded-br-md"
+                        : "bg-card border border-border/50 text-foreground rounded-bl-md"
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
             {chatStreaming && chatStreamContent && (
               <div className="flex justify-start">
                 <div className="max-w-[80%] rounded-2xl rounded-bl-md bg-card border border-border/50 px-3.5 py-2 text-sm leading-relaxed text-foreground">

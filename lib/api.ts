@@ -218,6 +218,15 @@ export async function* streamDiscussBook(
   }
 }
 
+export async function getDiscussionHistory(
+  bookId: string,
+  chapterIndex: number
+): Promise<{ messages: { role: string; content: string }[] }> {
+  const res = await fetch(`${API_BASE}/api/books/${bookId}/discussions/${chapterIndex}`)
+  if (!res.ok) return { messages: [] }
+  return res.json()
+}
+
 // ===== 时间线 =====
 
 export async function getTimeline(): Promise<{ items: { id: string; title: string; content: string; date: string; type: string }[] }> {
