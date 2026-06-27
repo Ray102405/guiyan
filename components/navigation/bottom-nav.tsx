@@ -2,11 +2,12 @@
 
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Home, MessageCircle, BookMarked, Settings } from "lucide-react"
+import { Home, MessageCircle, BookMarked, BookOpen, Settings } from "lucide-react"
 
 const items = [
   { href: "/", label: "首页", icon: Home },
   { href: "/chat", label: "聊天", icon: MessageCircle },
+  { href: "/books", label: "书架", icon: BookOpen },
   { href: "/memories", label: "回忆", icon: BookMarked },
   { href: "/settings", label: "设置", icon: Settings },
 ]

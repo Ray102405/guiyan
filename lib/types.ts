@@ -46,6 +46,39 @@ export interface Settings {
   weather_location: string
 }
 
+// ===== 书架 =====
+
+export interface Book {
+  id: string
+  title: string
+  author: string
+  filename: string
+  chapters: BookChapter[]
+  totalChapters: number
+  totalLines: number
+  currentLine: number
+  currentChapter: number
+  progress: number
+  createdAt: string
+  updatedAt: string
+  fullContent?: string // 仅详情接口返回
+}
+
+export interface BookChapter {
+  index: number
+  title: string
+  startLine: number
+  endLine: number
+}
+
+export interface ChapterContent {
+  bookId: string
+  chapterIndex: number
+  chapter: BookChapter
+  content: string
+  totalChapters: number
+}
+
 // ===== 流式响应 (NDJSON: {"t":"...","d":"..."}) =====
 
 export interface StreamChunk {

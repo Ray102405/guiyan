@@ -1,4 +1,4 @@
-import type { Settings, SessionListItem, SessionDetail, StreamChunk } from "./types"
+import type { Settings, SessionListItem, SessionDetail, StreamChunk, Book, BookChapter, ChapterContent } from "./types"
 
 const API_BASE = "/api/backend"
 
@@ -138,6 +138,84 @@ export async function getHomeData(): Promise<HomeData> {
   const res = await fetch(`${API_BASE}/api/home`)
   if (!res.ok) throw new Error("获取首页数据失败")
   return res.json()
+}
+
+// ===== 书架 =====
+
+export async function getBooks(): Promise<{ books: Book[]; count: number }> {
+  const res = await fetch(`${API_BASE}/api/books`)
+  if (!res.ok) throw new Error("获取书架失败")
+  return res.json()
+}
+
+export async function getBook(bookId: string): Promise<Book> {
+  const res = await fetch(`${API_BASE}/api/books/${bookId}`)
+  if (!res.ok) throw new Error("获取书籍失败")
+  return res.json()
+}
+
+export async function getChapter(bookId: string, chapterIndex: number): Promise<ChapterContent> {
+  const res = await fetch(`${API_BASE}/api/books/${bookId}/chapter/${chapterIndex}`)
+  if (!res.ok) throw new Error("获取章节失败")
+  return res.json()
+}
+
+export async function updateBookProgress(bookId: string, line: number, chapter: number): Promise<void> {
+  await fetch(`${API_BASE}/api/books/${bookId}/progress`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ line, chapter }),
+  })
+}
+
+export async function deleteBook(bookId: string): Promise<void> {
+  await fetch(`${API_BASE}/api/books/${bookId}`, { method: "DELETE" })
+}
+
+export async function discussBook(
+  bookId: string,
+  chapterIndex: number,
+  message: string,
+  history?: { role: string; content: string }[]
+): Promise<{ reply: string; thinking?: string }> {
+  const res = await fetch(`${API_BASE}/api/books/discuss`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ book_id: bookId, chapter_index: chapterIndex, message, history }),
+  })
+  if (!res.ok) throw new Error("讨论失败")
+  return res.json()
+}
+
+export async function* streamDiscussBook(
+  bookId: string,
+  chapterIndex: number,
+  message: string,
+  history?: { role: string; content: string }[]
+): AsyncGenerator<{ t: string; d: string }> {
+  const res = await fetch(`${API_BASE}/api/books/discuss/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ book_id: bookId, chapter_index: chapterIndex, message, history }),
+  })
+  if (!res.ok) return
+
+  const reader = res.body?.getReader()
+  if (!reader) return
+
+  const decoder = new TextDecoder()
+  let buffer = ""
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split("\n")
+    buffer = lines.pop() || ""
+    for (const line of lines) {
+      if (!line.trim()) continue
+      try { yield JSON.parse(line) } catch {}
+    }
+  }
 }
 
 // ===== 时间线 =====

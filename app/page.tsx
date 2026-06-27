@@ -253,7 +253,7 @@ function NavCard({
   href: string
   title: string
   description: string
-  icon: React.ComponentType<{ className?: string }>
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
   accent?: string
 }) {
   return (

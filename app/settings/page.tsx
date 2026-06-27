@@ -35,6 +35,7 @@ export default function SettingsPage() {
     qwen_api_key: "",
     qwen_base_url: "",
     qwen_vl_model: QWEN_MODELS[0].value,
+    weather_location: "",
   })
   const [showKey, setShowKey] = useState(false)
   const [showQwenKey, setShowQwenKey] = useState(false)
@@ -63,12 +64,12 @@ export default function SettingsPage() {
     setSaving(true)
     try {
       // 脱敏的 key 不发送（避免覆写后端存储的真实 key）
-      const payload = { ...settings }
-      if (payload.api_key && payload.api_key.includes("...")) {
-        delete payload.api_key
+      const payload: Record<string, unknown> = { ...settings }
+      if (typeof payload.api_key === "string" && payload.api_key.includes("...")) {
+        payload.api_key = ""
       }
-      if (payload.qwen_api_key && payload.qwen_api_key.includes("...")) {
-        delete payload.qwen_api_key
+      if (typeof payload.qwen_api_key === "string" && payload.qwen_api_key.includes("...")) {
+        payload.qwen_api_key = ""
       }
       await updateSettings(payload)
       toast.success("设置已保存")
