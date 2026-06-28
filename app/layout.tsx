@@ -61,7 +61,7 @@ export default function RootLayout({
           }}
         />
         <ThemeProvider>
-          <div className="relative mx-auto flex h-full max-w-lg flex-col pb-16">
+          <div className="relative mx-auto flex h-full max-w-lg flex-col">
             <main className="flex-1 overflow-hidden">
               {children}
             </main>

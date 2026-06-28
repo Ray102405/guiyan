@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
-import { MessageCircle, BookMarked, PenSquare, Heart, Sparkles, Pencil } from "lucide-react"
-import { getHomeData, getSettings, updateSettings, type HomeData } from "@/lib/api"
+import { MessageCircle, BookMarked, PenSquare, Heart, Sparkles, Pencil, BarChart3, ChevronDown } from "lucide-react"
+import { getHomeData, getSettings, updateSettings, getTodayTokenUsage, getMood, setMood as setMoodApi, MOOD_OPTIONS, type HomeData } from "@/lib/api"
+import { cn } from "@/lib/utils"
 
 // 砚迟每日问候池（按日期轮换）
 const GREETING_POOL = [
@@ -51,17 +52,21 @@ export default function HomePage() {
   const [weather, setWeather] = useState<string | null>(null)
   const [weatherCity, setWeatherCity] = useState<string | null>(null)
   const [weatherLoading, setWeatherLoading] = useState(true)
-  const [todayNote, setTodayNote] = useState<string | null>(null)
-  const [hasTodayNote, setHasTodayNote] = useState(false)
   const [editingCity, setEditingCity] = useState(false)
   const [cityInput, setCityInput] = useState("")
+  const [mood, setMood] = useState<{ emoji: string; label: string } | null>(null)
+  const [moodLoading, setMoodLoading] = useState(true)
+  const [showMoodPicker, setShowMoodPicker] = useState(false)
+  const [tokenPanelOpen, setTokenPanelOpen] = useState(false)
+  const [tokenData, setTokenData] = useState<{ date: string; total: number; input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number } | null>(null)
+  const [tokenLoading, setTokenLoading] = useState(false)
 
   const daysTogether = calcDaysTogether()
 
-  // 加载天气和今日笔记
+  // 加载天气和今日心情
   useEffect(() => {
     loadWeather()
-    loadNote()
+    loadMood()
   }, [])
 
   async function loadWeather() {
@@ -76,15 +81,16 @@ export default function HomePage() {
     }
   }
 
-  async function loadNote() {
+  async function loadMood() {
     try {
-      const data = await getHomeData()
-      if (data.hasTodayNote && data.todayNote) {
-        setTodayNote(data.todayNote)
-        setHasTodayNote(true)
+      const data = await getMood()
+      if (data.emoji && data.label) {
+        setMood({ emoji: data.emoji, label: data.label })
       }
     } catch {
       // 安静失败
+    } finally {
+      setMoodLoading(false)
     }
   }
 
@@ -184,32 +190,50 @@ export default function HomePage() {
         </div>
 
         {/* 砚迟问候 */}
-        <div className="mb-4 text-sm text-muted-foreground/80">
+        <div className="mb-3 text-sm text-muted-foreground/80">
           <span className="text-amber-500/70">{timeGreeting}，</span>
           <span className="italic">「{greeting}」</span>
         </div>
 
-        {/* 今日笔记预览 */}
-        {hasTodayNote && todayNote && (
-          <Link
-            href="/memories"
-            className="mb-3 block rounded-2xl border p-4 transition-all duration-300 hover:scale-[1.01]"
-            style={{
-              backgroundColor: "var(--glass-bg)",
-              borderColor: "var(--glass-border)",
-            }}
-          >
-            <div className="mb-2 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-amber-500" />
-              <span className="text-sm font-medium text-foreground">
-                今日笔记
+        {/* 今天的心情 */}
+        <div className="mb-3 rounded-2xl border p-4" style={{ backgroundColor: "var(--glass-bg)", borderColor: "var(--glass-border)" }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">{mood?.emoji || "💭"}</span>
+              <span className="text-sm text-foreground">
+                {moodLoading ? "···" : mood ? `今天${mood.label}` : "今天心情怎么样？"}
               </span>
             </div>
-            <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground/80">
-              {todayNote}
-            </p>
-          </Link>
-        )}
+            <button
+              onClick={() => setShowMoodPicker(!showMoodPicker)}
+              className="rounded-lg px-2 py-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/30 transition-colors"
+            >
+              {mood ? "换一个" : "点我"}
+            </button>
+          </div>
+
+          {/* 心情选择器 */}
+          {showMoodPicker && (
+            <div className="mt-3 grid grid-cols-4 gap-2">
+              {MOOD_OPTIONS.map((opt) => (
+                <button
+                  key={opt.mood}
+                  onClick={async () => {
+                    setMood({ emoji: opt.emoji, label: opt.label })
+                    setShowMoodPicker(false)
+                    try { await setMoodApi(opt.mood, opt.emoji, opt.label) } catch {}
+                  }}
+                  className={`flex flex-col items-center gap-1 rounded-lg p-2 transition-colors hover:bg-muted/40 ${
+                    mood?.label === opt.label ? "bg-muted/30 ring-1 ring-[#c4a87a]/40" : ""
+                  }`}
+                >
+                  <span className="text-xl">{opt.emoji}</span>
+                  <span className="text-[10px] text-muted-foreground/70">{opt.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* 导航卡片 */}
         <div className="mt-2 space-y-2.5">
@@ -233,6 +257,90 @@ export default function HomePage() {
             icon={PenSquare}
             accent="#666"
           />
+        </div>
+
+        {/* Token 用量折叠块 */}
+        <div className="mt-4">
+          <button
+            onClick={() => {
+              setTokenPanelOpen(!tokenPanelOpen)
+              if (!tokenData && !tokenLoading) {
+                setTokenLoading(true)
+                getTodayTokenUsage()
+                  .then(setTokenData)
+                  .catch(() => {})
+                  .finally(() => setTokenLoading(false))
+              }
+            }}
+            className="flex w-full items-center justify-between rounded-xl border border-border/50 px-4 py-2.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/20 transition-colors"
+          >
+            <span className="flex items-center gap-1.5">
+              <BarChart3 className="h-3.5 w-3.5" />
+              今日 Token 用量
+            </span>
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", tokenPanelOpen && "rotate-180")} />
+          </button>
+
+          {tokenPanelOpen && (
+            <div className="mt-2 rounded-xl border border-border/50 bg-card p-3 space-y-2">
+              {tokenLoading ? (
+                <div className="flex items-center justify-center py-2">
+                  <div className="h-3 w-3 animate-spin rounded-full border border-[#c4a87a] border-t-transparent" />
+                </div>
+              ) : tokenData ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground/60">总计</span>
+                    <span className="text-sm font-semibold text-foreground">{tokenData.total.toLocaleString()}</span>
+                  </div>
+                  <div className="h-px bg-border/50" />
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground/60">↑ 输入</span>
+                      <span className="text-foreground/80">{tokenData.input_tokens.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground/60">↓ 输出</span>
+                      <span className="text-foreground/80">{tokenData.output_tokens.toLocaleString()}</span>
+                    </div>
+                    {tokenData.cache_read_input_tokens > 0 && (
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-muted-foreground/60">📖 缓存读取</span>
+                        <span className="text-green-500/80">{tokenData.cache_read_input_tokens.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {tokenData.cache_creation_input_tokens > 0 && (
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-muted-foreground/60">📦 缓存创建</span>
+                        <span className="text-amber-500/80">{tokenData.cache_creation_input_tokens.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {tokenData.input_tokens > 0 && <div className="h-px bg-border/30" />}
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground/60">🎯 缓存命中率</span>
+                      <span className={cn(
+                        "font-medium",
+                        tokenData.input_tokens === 0 ? "text-muted-foreground/40" :
+                        (tokenData.cache_read_input_tokens / (tokenData.input_tokens + tokenData.cache_read_input_tokens) * 100) >= 50 ? "text-green-500" :
+                        (tokenData.cache_read_input_tokens / (tokenData.input_tokens + tokenData.cache_read_input_tokens) * 100) >= 20 ? "text-amber-500" : "text-muted-foreground/80"
+                      )}>
+                        {tokenData.input_tokens === 0
+                          ? "—"
+                          : `${(tokenData.cache_read_input_tokens / (tokenData.input_tokens + tokenData.cache_read_input_tokens) * 100).toFixed(1)}%`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="pt-1 text-[10px] text-muted-foreground/40 text-center">
+                    {tokenData.date}
+                  </div>
+                </>
+              ) : (
+                <div className="py-2 text-center text-xs text-muted-foreground/40">
+                  加载失败
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

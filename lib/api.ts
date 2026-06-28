@@ -1,6 +1,6 @@
-import type { Settings, SessionListItem, SessionDetail, StreamChunk, Book, BookChapter, ChapterContent } from "./types"
+import type { Settings, SessionListItem, SessionDetail, StreamChunk, Book, BookChapter, ChapterContent, AU } from "./types"
 
-const API_BASE = "/api/backend"
+const API_BASE = "/backend"
 
 // 生成 session id（和服务端一致）
 export function generateSessionId(): string {
@@ -82,6 +82,16 @@ export async function getSessionDetail(id: string): Promise<SessionDetail> {
 
 export async function deleteSession(id: string): Promise<void> {
   await fetch(`${API_BASE}/session/${id}`, { method: "DELETE" })
+}
+
+export async function deleteSessionMessages(sessionId: string, messageIds: string[]): Promise<{ deleted: number }> {
+  const res = await fetch(`${API_BASE}/api/session/${sessionId}/messages/delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message_ids: messageIds }),
+  })
+  if (!res.ok) throw new Error("删除消息失败")
+  return res.json()
 }
 
 export async function restoreSession(id: string, history: { role: string; content: string }[]): Promise<void> {
@@ -224,6 +234,139 @@ export async function getDiscussionHistory(
 ): Promise<{ messages: { role: string; content: string }[] }> {
   const res = await fetch(`${API_BASE}/api/books/${bookId}/discussions/${chapterIndex}`)
   if (!res.ok) return { messages: [] }
+  return res.json()
+}
+
+// ===== Token 用量 =====
+
+export interface DailyTokenUsage {
+  date: string
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens: number
+  cache_creation_input_tokens: number
+  total: number
+}
+
+export async function getTodayTokenUsage(): Promise<DailyTokenUsage> {
+  const res = await fetch(`${API_BASE}/api/token-usage/today`)
+  if (!res.ok) throw new Error("获取 token 用量失败")
+  return res.json()
+}
+
+export interface TodayStatus {
+  date: string
+  note: string | null
+  hasNote: boolean
+  sessions: number
+  messages: number
+  pendingMemories: number
+  confirmedMemories: number
+  tokens: number
+}
+
+export async function getTodayStatus(): Promise<TodayStatus> {
+  const res = await fetch(`${API_BASE}/api/today-status`)
+  if (!res.ok) throw new Error("获取今日状态失败")
+  return res.json()
+}
+
+// ===== 今日心情 =====
+
+export interface MoodData {
+  date: string
+  mood: string | null
+  emoji: string | null
+  label: string | null
+}
+
+export const MOOD_OPTIONS = [
+  { mood: "happy", emoji: "😊", label: "开心" },
+  { mood: "calm", emoji: "😌", label: "平静" },
+  { mood: "sweet", emoji: "🥰", label: "甜蜜" },
+  { mood: "okay", emoji: "😐", label: "一般" },
+  { mood: "sad", emoji: "😢", label: "难过" },
+  { mood: "annoyed", emoji: "😤", label: "烦躁" },
+  { mood: "tired", emoji: "😴", label: "累" },
+  { mood: "nice", emoji: "✨", label: "还不错" },
+]
+
+export async function getMood(): Promise<MoodData> {
+  const res = await fetch(`${API_BASE}/api/mood`)
+  if (!res.ok) throw new Error("获取心情失败")
+  return res.json()
+}
+
+export async function setMood(mood: string, emoji: string, label: string): Promise<MoodData> {
+  const res = await fetch(`${API_BASE}/api/mood`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mood, emoji, label }),
+  })
+  if (!res.ok) throw new Error("设置心情失败")
+  return res.json()
+}
+
+// ===== AU（平行宇宙） =====
+
+export interface AUListResponse {
+  aus: AU[]
+}
+
+export async function getAuList(): Promise<AUListResponse> {
+  const res = await fetch(`${API_BASE}/api/au`)
+  if (!res.ok) throw new Error("获取 AU 列表失败")
+  return res.json()
+}
+
+export async function createAu(data: { name: string; background?: string; persona_override?: string; tone_shift?: string }): Promise<AU> {
+  const res = await fetch(`${API_BASE}/api/au`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error("创建 AU 失败")
+  return res.json()
+}
+
+export async function activateAu(auId: string): Promise<AU> {
+  const res = await fetch(`${API_BASE}/api/au/${auId}/activate`, {
+    method: "PUT",
+  })
+  if (!res.ok) throw new Error("激活 AU 失败")
+  return res.json()
+}
+
+export async function deleteAu(auId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/au/${auId}`, {
+    method: "DELETE",
+  })
+  if (!res.ok) throw new Error("删除 AU 失败")
+}
+
+// ===== 笔记 =====
+
+export interface NoteItem {
+  id: string
+  date: string
+  preview: string
+  label?: string
+  highlighted?: boolean
+}
+
+export interface NotesListResponse {
+  notes: NoteItem[]
+}
+
+export async function getNotesList(): Promise<NotesListResponse> {
+  const res = await fetch(`${API_BASE}/api/notes`)
+  if (!res.ok) throw new Error("获取笔记列表失败")
+  return res.json()
+}
+
+export async function getNoteContent(date: string): Promise<{ date: string; content: string }> {
+  const res = await fetch(`${API_BASE}/api/notes/${date}`)
+  if (!res.ok) throw new Error("获取笔记内容失败")
   return res.json()
 }
 

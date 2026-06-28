@@ -44,7 +44,7 @@ export function PwaInstallPrompt() {
   if (!show) return null
 
   return (
-    <div className="fixed bottom-20 left-4 right-4 z-50 mx-auto max-w-lg animate-in slide-in-from-bottom-4 fade-in">
+    <div className="fixed bottom-28 left-4 right-4 z-50 mx-auto max-w-lg animate-in slide-in-from-bottom-4 fade-in">
       <div className="rounded-2xl border border-border/50 bg-card/95 backdrop-blur-xl p-4 shadow-lg">
         <div className="flex items-start gap-3">
           <div className="shrink-0 mt-0.5 w-8 h-8 rounded-lg bg-[#c4a87a]/20 flex items-center justify-center text-sm">

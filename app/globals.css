@@ -204,3 +204,14 @@ body::after {
 .light ::-webkit-scrollbar-thumb {
   background: #d2d2d7;
 }
+
+/* ===== PWA safe area: align with bottom nav ===== */
+.pb-nav-safe {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
+
+.pb-safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+

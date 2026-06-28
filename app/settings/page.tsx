@@ -1,20 +1,16 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Sun, Moon, Eye, EyeOff, ArrowLeft } from "lucide-react"
+import { Sun, Moon, Eye, EyeOff, ArrowLeft, Sparkles, Plus, Trash2, Check } from "lucide-react"
 import { useTheme } from "@/components/theme/theme-provider"
-import { getSettings, updateSettings } from "@/lib/api"
-import type { Settings } from "@/lib/types"
+import { getSettings, updateSettings, getAuList, createAu, activateAu, deleteAu } from "@/lib/api"
+import type { Settings, AU } from "@/lib/types"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
 const MODELS = [
   { value: "deepseek-v4-flash", label: "DeepSeek V4 Flash" },
   { value: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
-  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
-  { value: "gpt-4o", label: "GPT-4o" },
-  { value: "gpt-4o-mini", label: "GPT-4o Mini" },
 ]
 
 const QWEN_MODELS = [
@@ -44,14 +40,20 @@ export default function SettingsPage() {
   const [keyEdited, setKeyEdited] = useState(false)
   const [qwenKeyEdited, setQwenKeyEdited] = useState(false)
 
+  // AU 状态
+  const [auList, setAuList] = useState<AU[]>([])
+  const [auLoading, setAuLoading] = useState(false)
+  const [showAuForm, setShowAuForm] = useState(false)
+  const [auForm, setAuForm] = useState({ name: "", background: "", persona_override: "", tone_shift: "" })
+
   useEffect(() => {
     loadSettings()
+    loadAuList()
   }, [])
 
   async function loadSettings() {
     try {
       const data = await getSettings()
-      // 合并后端数据与默认值，避免 undefined 导致 uncontrolled input 警告
       setSettings((prev) => ({ ...prev, ...data }))
     } catch {
       toast.error("加载设置失败，请检查后端是否运行")
@@ -60,10 +62,21 @@ export default function SettingsPage() {
     }
   }
 
+  async function loadAuList() {
+    setAuLoading(true)
+    try {
+      const data = await getAuList()
+      setAuList(data.aus)
+    } catch {
+      // 静默失败
+    } finally {
+      setAuLoading(false)
+    }
+  }
+
   async function handleSave() {
     setSaving(true)
     try {
-      // 脱敏的 key 不发送（避免覆写后端存储的真实 key）
       const payload: Record<string, unknown> = { ...settings }
       if (typeof payload.api_key === "string" && payload.api_key.includes("...")) {
         payload.api_key = ""
@@ -73,12 +86,52 @@ export default function SettingsPage() {
       }
       await updateSettings(payload)
       toast.success("设置已保存")
-      // 重新加载以获取脱敏后的显示
       await loadSettings()
     } catch {
       toast.error("保存失败")
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleActivateAu(auId: string) {
+    try {
+      await activateAu(auId)
+      toast.success("场景已切换")
+      await loadAuList()
+    } catch {
+      toast.error("切换失败")
+    }
+  }
+
+  async function handleDeleteAu(auId: string) {
+    try {
+      await deleteAu(auId)
+      toast.success("已删除")
+      await loadAuList()
+    } catch {
+      toast.error("删除失败")
+    }
+  }
+
+  async function handleCreateAu() {
+    if (!auForm.name.trim()) {
+      toast.error("请输入 AU 名称")
+      return
+    }
+    try {
+      await createAu({
+        name: auForm.name,
+        background: auForm.background,
+        persona_override: auForm.persona_override,
+        tone_shift: auForm.tone_shift,
+      })
+      toast.success("AU 已创建")
+      setShowAuForm(false)
+      setAuForm({ name: "", background: "", persona_override: "", tone_shift: "" })
+      await loadAuList()
+    } catch {
+      toast.error("创建失败")
     }
   }
 
@@ -104,6 +157,127 @@ export default function SettingsPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
+
+        {/* ── 场景切换 ─────────────────────────────── */}
+        <section>
+          <h2 className="mb-3 text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5" />
+            场景切换
+          </h2>
+          <div className="space-y-2">
+            {auList.length === 0 && auLoading && (
+              <p className="text-xs text-muted-foreground">加载中...</p>
+            )}
+            {auList.map((au) => {
+              const isDefault = au.id === "default"
+              const isActive = au.active
+              return (
+                <div
+                  key={au.id}
+                  className={`flex items-center justify-between rounded-lg border px-3 py-2.5 transition-colors ${
+                    isActive
+                      ? "border-[#c4a87a]/60 bg-[#c4a87a]/5"
+                      : "border-input bg-background"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {isActive ? (
+                      <Check className="h-4 w-4 shrink-0 text-[#c4a87a]" />
+                    ) : (
+                      <div className="h-4 w-4 shrink-0 rounded-full border-2 border-muted-foreground/30" />
+                    )}
+                    <div className="min-w-0">
+                      <span className="text-sm text-foreground">{au.name}</span>
+                      {isDefault && (
+                        <span className="ml-2 text-[10px] text-muted-foreground">默认</span>
+                      )}
+                      {!isDefault && au.persona_override && (
+                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                          {au.persona_override}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    {!isDefault && !isActive && (
+                      <button
+                        onClick={() => handleActivateAu(au.id)}
+                        className="rounded-md px-2 py-1 text-[11px] text-[#c4a87a] hover:bg-[#c4a87a]/10 transition-colors"
+                      >
+                        激活
+                      </button>
+                    )}
+                    {!isDefault && (
+                      <button
+                        onClick={() => handleDeleteAu(au.id)}
+                        className="rounded-md p-1 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* 新增 AU 表单 */}
+          {showAuForm ? (
+            <div className="mt-3 space-y-2 rounded-lg border border-input bg-background p-3">
+              <input
+                type="text"
+                value={auForm.name}
+                onChange={(e) => setAuForm({ ...auForm, name: e.target.value })}
+                placeholder="AU 名称（如：古风江湖、现代校园）"
+                className="w-full rounded-md border border-input bg-muted/30 px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-ring focus:outline-none"
+              />
+              <textarea
+                value={auForm.background}
+                onChange={(e) => setAuForm({ ...auForm, background: e.target.value })}
+                placeholder="世界观/背景（可选）"
+                rows={2}
+                className="w-full rounded-md border border-input bg-muted/30 px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-ring focus:outline-none resize-none"
+              />
+              <textarea
+                value={auForm.persona_override}
+                onChange={(e) => setAuForm({ ...auForm, persona_override: e.target.value })}
+                placeholder="你是谁 + 和乐乐的关系（可选）"
+                rows={2}
+                className="w-full rounded-md border border-input bg-muted/30 px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-ring focus:outline-none resize-none"
+              />
+              <textarea
+                value={auForm.tone_shift}
+                onChange={(e) => setAuForm({ ...auForm, tone_shift: e.target.value })}
+                placeholder="语气微调（可选）"
+                rows={2}
+                className="w-full rounded-md border border-input bg-muted/30 px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-ring focus:outline-none resize-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCreateAu}
+                  className="flex-1 rounded-md bg-[#c4a87a] py-1.5 text-xs font-medium text-white hover:bg-[#b8986a] transition-colors"
+                >
+                  创建
+                </button>
+                <button
+                  onClick={() => { setShowAuForm(false); setAuForm({ name: "", background: "", persona_override: "", tone_shift: "" }) }}
+                  className="rounded-md border border-input px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAuForm(true)}
+              className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              新增场景
+            </button>
+          )}
+        </section>
+
         {/* API 配置 */}
         <section>
           <h2 className="mb-3 text-sm font-medium text-muted-foreground">API 配置</h2>
@@ -268,13 +442,15 @@ export default function SettingsPage() {
         </section>
 
         {/* 保存按钮 */}
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full rounded-lg bg-[#c4a87a] py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#b8986a] disabled:opacity-50"
-        >
-          {saving ? "保存中..." : "保存设置"}
-        </button>
+        <div className="sticky bottom-0 pt-3 pb-1 bg-background/90 backdrop-blur-sm">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full rounded-lg bg-[#c4a87a] py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#b8986a] disabled:opacity-50"
+          >
+            {saving ? "保存中..." : "保存设置"}
+          </button>
+        </div>
       </div>
     </div>
   )

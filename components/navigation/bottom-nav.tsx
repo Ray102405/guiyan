@@ -16,7 +16,7 @@ export function BottomNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="glass-nav fixed bottom-0 left-0 right-0 z-50 border-t">
+    <nav className="glass-nav shrink-0 border-t pb-safe-bottom">
       <div className="mx-auto flex h-16 max-w-lg items-center justify-around px-2">
         {items.map((item) => {
           const isActive =

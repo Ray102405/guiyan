@@ -5,6 +5,11 @@ export interface TokenUsage {
   output_tokens?: number
   cache_read_input_tokens?: number
   cache_creation_input_tokens?: number
+  // Anthropic 兼容 API 的字段名（message.tsx 回退取值用）
+  prompt_tokens?: number
+  completion_tokens?: number
+  prompt_cache_hit_tokens?: number
+  prompt_cache_miss_tokens?: number
 }
 
 export interface Message {
@@ -44,6 +49,17 @@ export interface Settings {
   qwen_base_url: string
   qwen_vl_model: string
   weather_location: string
+}
+
+// ===== AU（平行宇宙） =====
+
+export interface AU {
+  id: string
+  name: string
+  active: boolean
+  background: string
+  persona_override: string
+  tone_shift: string
 }
 
 // ===== 书架 =====

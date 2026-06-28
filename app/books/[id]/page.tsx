@@ -10,6 +10,8 @@ import { getBook, getChapter, updateBookProgress, streamDiscussBook, getDiscussi
 import type { Book, ChapterContent } from "@/lib/types"
 import { toast } from "sonner"
 
+const BACKEND = "/backend"
+
 interface ChatMsg {
   role: "user" | "assistant" | "system"
   content: string
@@ -144,7 +146,7 @@ export default function ReaderPage() {
     if (chatMsgs.length === 0) return
     try {
       toast.loading("提取中...")
-      const res = await fetch(`${"/api/backend"}/remember`, {
+      const res = await fetch(`${BACKEND}/remember`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -6,7 +6,7 @@ import { ThinkingBlock } from "./thinking-block"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 
-const AVATAR_API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:2612"
+const AVATAR_API = "/backend"
 
 function getStoredAvatar(type: "ai" | "user"): string | null {
   if (typeof window === "undefined") return null
@@ -146,27 +146,28 @@ export function Message({ message, isStreaming, onDelete }: MessageProps) {
               ))}
             </div>
           )}
-          {message.content}
+          {message.content.trim()}
           {isStreaming && !isUser && <span className="ml-0.5 animate-pulse">|</span>}
         </div>
 
-        {message.timestamp && (
+        {(message.timestamp || message.tokens) && (
           <span
             className={cn(
               "text-[10px] text-muted-foreground/60 px-1",
               isUser && "text-right"
             )}
           >
-            {format(new Date(message.timestamp), "HH:mm")}
+            {message.timestamp && format(new Date(message.timestamp), "HH:mm")}
             {message.tokens && (
               <span className="ml-1.5">
-                ↑{message.tokens.input_tokens || 0} · ↓{message.tokens.output_tokens || 0}
-                {(message.tokens.cache_creation_input_tokens ?? 0) > 0 && (
-                  <span> · 缓存创建 {message.tokens.cache_creation_input_tokens}</span>
-                )}
-                {(message.tokens.cache_read_input_tokens ?? 0) > 0 && (
-                  <span> · 缓存读取 {message.tokens.cache_read_input_tokens}</span>
-                )}
+                {(() => {
+                  const tk = message.tokens!
+                  const inp = tk.input_tokens ?? tk.prompt_tokens ?? 0
+                  const out = tk.output_tokens ?? tk.completion_tokens ?? 0
+                  const cr = tk.cache_read_input_tokens ?? tk.prompt_cache_hit_tokens ?? 0
+                  const cc = tk.cache_creation_input_tokens ?? tk.prompt_cache_miss_tokens ?? 0
+                  return <span>↑{inp} · ↓{out}{(cc > 0 && <span> · 缓存创建 {cc}</span>)}{(cr > 0 && <span> · 缓存读取 {cr}</span>)}{(cr > 0 && inp > 0 && <span className="text-green-500/70"> ({((cr / (inp + cr)) * 100).toFixed(1)}%)</span>)}</span>
+                })()}
               </span>
             )}
           </span>
