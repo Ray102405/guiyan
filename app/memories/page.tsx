@@ -66,7 +66,7 @@ export default function MemoriesPage() {
   const router = useRouter()
   const [data, setData] = useState<TimelineData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<"highlights" | "chats" | "notes" | "discussions" | "review" | "memorybank" | "life">("highlights")
+  const [tab, setTab] = useState<"highlights" | "chats" | "notes" | "discussions" | "review" | "memorybank" | "life">("life")
   const [selectedItem, setSelectedItem] = useState<TimelineItem | null>(null)
   const [notesList, setNotesList] = useState<NoteItem[]>([])
   const [notesLoading, setNotesLoading] = useState(false)
@@ -436,7 +436,7 @@ export default function MemoriesPage() {
       <div className="space-y-2">
         {notesList.map((note) => (
           <div
-            key={note.date}
+            key={note.id}
             onClick={() => handleOpenNote(note.date)}
             className="w-full rounded-xl border border-border/50 bg-card p-3 text-left hover:bg-muted/30 transition-colors group cursor-pointer"
           >
@@ -1029,7 +1029,7 @@ export default function MemoriesPage() {
 
         {/* ③ 即将到来 */}
         {upcoming.length > 0 && (
-          <div className="rounded-xl border border-[#c4a87a]/20 bg-[#c4a87a]/5 p-3 space-y-2">
+          <div className="rounded-xl border border-border/50 bg-card p-3 space-y-2">
             <div className="flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5 text-[#c4a87a]" />
               <span className="text-[10px] font-medium text-[#c4a87a]">即将到来</span>
@@ -1038,8 +1038,8 @@ export default function MemoriesPage() {
               const diff = Math.ceil((new Date(e.date + "T00:00:00").getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
               const label = diff === 0 ? "今天" : diff === 1 ? "明天" : `${diff} 天后`
               return (
-                <div key={e.id} className="flex items-center gap-2 rounded-lg bg-card/60 px-2.5 py-2">
-                  <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium", TYPE_STYLE[e.type] || TYPE_STYLE.custom)}>
+                <div key={e.id} className="flex items-center gap-2 rounded-lg bg-muted/20 px-2.5 py-2">
+                  <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium", TYPE_STYLE[e.type])}>
                     {TYPE_LABEL[e.type] || e.type}
                   </span>
                   <span className="flex-1 text-xs text-foreground/80">{e.title}</span>
@@ -1206,8 +1206,8 @@ export default function MemoriesPage() {
           <div className="flex gap-1 overflow-x-auto flex-1">
             {/* 主 tab：始终显示 */}
             {([
-              { key: "highlights" as const, label: "精选", icon: Sparkles },
               { key: "life" as const, label: "生活", icon: CalendarHeart },
+              { key: "highlights" as const, label: "精选", icon: Sparkles },
               { key: "memorybank" as const, label: "记忆库", icon: BookMarked },
               { key: "review" as const, label: "待审核", icon: Clock },
               { key: "notes" as const, label: "笔记", icon: FileText },

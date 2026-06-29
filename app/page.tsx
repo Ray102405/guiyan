@@ -55,7 +55,7 @@ function formatCountdown(days: number): string {
   return `${days} 天后`
 }
 
-const MILESTONE_TYPES = new Set(["anniversary", "exam", "deadline"])
+const MILESTONE_TYPES = new Set(["anniversary"])
 
 export default function HomePage() {
   const [weather, setWeather] = useState<string | null>(null)
@@ -147,7 +147,7 @@ export default function HomePage() {
           const diff = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
           return { ...e, _days_from_now: diff }
         })
-        .filter(e => e._days_from_now! >= 0)
+        .filter(e => e._days_from_now! >= 0 && e._days_from_now! <= 30)
         .sort((a, b) => a._days_from_now! - b._days_from_now!)
         .slice(0, 3)
       setMilestones(filtered)
@@ -183,7 +183,7 @@ export default function HomePage() {
     <div className="flex h-full flex-col pt-[env(safe-area-inset-top,12px)]">
       <div className="flex-1 overflow-y-auto px-5 pb-2">
         {/* ===== 标题区 ===== */}
-        <div className="pt-6 pb-5">
+        <div className="pt-5 pb-3">
           <h1
             className="font-['HongLei'] text-7xl leading-tight tracking-normal"
             style={{
@@ -195,7 +195,7 @@ export default function HomePage() {
           >
             归砚
           </h1>
-          <div className="mt-2 mb-6 flex items-baseline gap-2">
+          <div className="mt-1 mb-4 flex items-baseline gap-2">
             <span className="text-sm text-[#c4a87a]/80 font-['LXGW_WenKai']">与你，第</span>
             <span className="text-6xl font-serif text-[#c4a87a] leading-none tracking-wide">{daysTogether}</span>
             <span className="text-sm text-[#c4a87a]/80 font-['LXGW_WenKai']">天</span>
@@ -203,7 +203,7 @@ export default function HomePage() {
         </div>
 
         {/* ===== 天气 + 时间 ===== */}
-        <div className="mb-4 flex gap-3">
+        <div className="mb-3 flex gap-3">
           {/* 左：天气 */}
           <div
             className="flex-1 rounded-2xl border p-3.5"
@@ -258,7 +258,7 @@ export default function HomePage() {
         </div>
 
         {/* ===== 砚迟问候 ===== */}
-        <div className="mb-4 text-sm text-muted-foreground/80">
+        <div className="mb-3 text-sm text-muted-foreground/80">
           <span className="text-[#c4a87a]/70">{timeGreeting}，</span>
           <span className="italic">「{greeting}」</span>
         </div>
