@@ -1,6 +1,6 @@
 import type { Settings, SessionListItem, SessionDetail, StreamChunk, Book, BookChapter, ChapterContent, AU } from "./types"
 
-const API_BASE = "/backend"
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/backend"
 
 // 生成 session id（和服务端一致）
 export function generateSessionId(): string {
@@ -375,5 +375,46 @@ export async function getNoteContent(date: string): Promise<{ date: string; cont
 export async function getTimeline(): Promise<{ items: { id: string; title: string; content: string; date: string; type: string }[] }> {
   const res = await fetch(`${API_BASE}/api/timeline`)
   if (!res.ok) throw new Error("获取时间线失败")
+  return res.json()
+}
+
+// ===== 日历 =====
+
+export interface CalendarEntry {
+  id: string
+  title: string
+  date: string
+  type: string
+  recurring: boolean
+  note: string
+  _days_from_now?: number
+}
+
+export async function getCalendarEntries(): Promise<{ entries: CalendarEntry[]; count: number }> {
+  const res = await fetch(`${API_BASE}/api/calendar`)
+  if (!res.ok) throw new Error("获取日历失败")
+  return res.json()
+}
+
+export async function getUpcomingCalendar(days: number = 7): Promise<{ entries: CalendarEntry[]; count: number }> {
+  const res = await fetch(`${API_BASE}/api/calendar/upcoming?days=${days}`)
+  if (!res.ok) throw new Error("获取待办日历失败")
+  return res.json()
+}
+
+// ===== 记忆索引 =====
+
+export interface MemoryEntry {
+  id: string
+  category: string
+  date: string
+  content: string
+  favorite?: boolean
+  hitCount?: number
+}
+
+export async function getMemoryIndex(): Promise<{ memories: MemoryEntry[]; count: number }> {
+  const res = await fetch(`${API_BASE}/api/memory/index`)
+  if (!res.ok) throw new Error("获取记忆索引失败")
   return res.json()
 }

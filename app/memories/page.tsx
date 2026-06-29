@@ -1,15 +1,16 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ArrowLeft, BookMarked, Sparkles, MessageSquare, FileText, Search, Star, Check, X, Pencil, Trash2, Clock, CheckSquare, Square, BookOpen, Heart, Calendar, ChevronRight } from "lucide-react"
+import { ArrowLeft, BookMarked, Sparkles, MessageSquare, FileText, Search, Star, Check, X, Pencil, Trash2, Clock, CheckSquare, Square, BookOpen, CalendarHeart, ChevronRight } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
 import { getNotesList, getNoteContent } from "@/lib/api"
 import type { NoteItem } from "@/lib/api"
+import { MoodIcon } from "@/components/mood/mood-icon"
 
-const API_BASE = "/backend"
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/backend"
 
 interface TimelineItem {
   id: string
@@ -65,7 +66,7 @@ export default function MemoriesPage() {
   const router = useRouter()
   const [data, setData] = useState<TimelineData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<"highlights" | "chats" | "notes" | "discussions" | "review" | "memorybank" | "mood" | "calendar">("highlights")
+  const [tab, setTab] = useState<"highlights" | "chats" | "notes" | "discussions" | "review" | "memorybank" | "life">("highlights")
   const [selectedItem, setSelectedItem] = useState<TimelineItem | null>(null)
   const [notesList, setNotesList] = useState<NoteItem[]>([])
   const [notesLoading, setNotesLoading] = useState(false)
@@ -103,13 +104,14 @@ export default function MemoriesPage() {
   const [formType, setFormType] = useState<"exam" | "deadline" | "anniversary" | "custom">("custom")
   const [formRecurring, setFormRecurring] = useState(false)
   const [formNote, setFormNote] = useState("")
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
   useEffect(() => {
     loadTimeline()
     loadMoodHistory()
     if (tab === "review") loadPendingMemories()
     if (tab === "memorybank") loadConfirmedMemories()
-    if (tab === "calendar") loadCalendar()
+    if (tab === "life") loadCalendar()
   }, [])
 
   // 页面可见时自动刷新时间线 + 笔记
@@ -127,8 +129,7 @@ export default function MemoriesPage() {
   useEffect(() => {
     if (tab === "review") loadPendingMemories()
     if (tab === "memorybank") loadConfirmedMemories()
-    if (tab === "mood") loadMoodHistory()
-    if (tab === "calendar") loadCalendar()
+    if (tab === "life") { loadMoodHistory(); loadCalendar() }
     if (tab === "notes") loadNotesList()
     if (tab === "chats" || tab === "highlights") loadTimeline()
   }, [tab])
@@ -850,16 +851,9 @@ export default function MemoriesPage() {
     )
   }
 
-  // ══ 日程 tab ═════════════════════════════════════
-  const CALENDAR_TYPE_LABELS: Record<string, string> = {
-    exam: "考试",
-    deadline: "截止",
-    anniversary: "纪念日",
-    custom: "其他",
-  }
-
-  function renderCalendarTab() {
-    if (calendarLoading) {
+  // ══ 生活 tab ══════════════════════════════════════
+  function renderLifeTab() {
+    if (moodLoading || calendarLoading) {
       return (
         <div className="flex items-center justify-center py-12">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#c4a87a] border-t-transparent" />
@@ -867,48 +861,207 @@ export default function MemoriesPage() {
       )
     }
 
+    // ── 心情数据 ──
+    const moodMap = new Map<string, MoodRecord>()
+    for (const r of moodHistory) {
+      moodMap.set(r.date, r)
+    }
+    const recentSorted = [...moodHistory].sort((a, b) => a.date.localeCompare(b.date))
+    const recent = recentSorted.slice(-14)
+
+    // ── 日程数据 ──
     const today = new Date()
+    today.setHours(0, 0, 0, 0)
     const todayStr = today.toISOString().slice(0, 10)
+
+    const eventsByDate = new Map<string, CalendarEvent[]>()
+    for (const e of calendarEvents) {
+      const existing = eventsByDate.get(e.date) || []
+      existing.push(e)
+      eventsByDate.set(e.date, existing)
+    }
+
     const sevenDaysLater = new Date(today)
     sevenDaysLater.setDate(sevenDaysLater.getDate() + 7)
+    const upcoming = [...calendarEvents]
+      .filter((e) => {
+        const d = new Date(e.date + "T00:00:00")
+        return d >= today && d <= sevenDaysLater
+      })
+      .sort((a, b) => a.date.localeCompare(b.date))
 
-    const sorted = [...calendarEvents].sort((a, b) => a.date.localeCompare(b.date))
-    const upcoming = sorted.filter((e) => {
-      const d = new Date(e.date + "T00:00:00")
-      return d >= today && d < sevenDaysLater
-    })
-    const future = sorted.filter((e) => {
-      const d = new Date(e.date + "T00:00:00")
-      return d >= sevenDaysLater
-    })
-    const past = sorted.filter((e) => {
-      const d = new Date(e.date + "T00:00:00")
-      return d < today
-    })
+    // ── 日历网格 ──
+    const dates = moodHistory.map((r) => r.date).sort()
+    const earliest = dates[0] || todayStr
+    const months: string[] = []
+    let cursor = earliest.slice(0, 7)
+    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`
+    while (cursor <= currentMonth) {
+      months.push(cursor)
+      const [y, m] = cursor.split("-").map(Number)
+      const next = new Date(y, m, 1)
+      cursor = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`
+    }
 
-    function typeColor(type: string) {
-      switch (type) {
-        case "exam": return "text-rose-400 bg-rose-400/10"
-        case "deadline": return "text-orange-400 bg-orange-400/10"
-        case "anniversary": return "text-pink-400 bg-pink-400/10"
-        default: return "text-blue-400 bg-blue-400/10"
-      }
+    const TYPE_STYLE: Record<string, string> = {
+      exam: "text-rose-400 bg-rose-400/10",
+      deadline: "text-orange-400 bg-orange-400/10",
+      anniversary: "text-pink-400 bg-pink-400/10",
+      custom: "text-blue-400 bg-blue-400/10",
+    }
+    const TYPE_LABEL: Record<string, string> = {
+      exam: "考试", deadline: "截止", anniversary: "纪念日", custom: "其他",
     }
 
     return (
-      <div className="space-y-3">
-        {/* 新增按钮 → 表单 */}
+      <div className="space-y-6 pb-4">
+        {/* ① 近14天心情趋势 */}
+        {recent.length > 1 && (
+          <div className="rounded-xl border border-border/50 bg-card p-3">
+            <div className="mb-1.5 text-[10px] text-muted-foreground/50">近 14 天心情</div>
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {recent.map((r) => (
+                <div key={r.date} className="flex flex-col items-center gap-0.5 shrink-0" title={`${r.date} · ${r.label}`}>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/40">
+                    <MoodIcon mood={r.mood} className="h-5 w-5 text-[#c4a87a]" />
+                  </div>
+                  <span className="text-[8px] text-muted-foreground/40">{r.date.slice(5)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ② 日历格子 */}
+        {months.map((month) => {
+          const [y, m] = month.split("-").map(Number)
+          const firstDay = new Date(y, m - 1, 1).getDay()
+          const daysInMonth = new Date(y, m, 0).getDate()
+          const isCurrentMonth = month === currentMonth
+          const monthMoods = moodHistory.filter((r) => r.date.startsWith(month))
+          const moodCount = monthMoods.length
+
+          const cells: React.ReactNode[] = []
+          for (let i = 0; i < firstDay; i++) {
+            cells.push(<div key={`empty-${i}`} className="w-full aspect-square" />)
+          }
+          for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${month}-${String(d).padStart(2, "0")}`
+            const record = moodMap.get(dateStr)
+            const dayEvents = eventsByDate.get(dateStr)
+            const isToday = dateStr === todayStr
+            cells.push(
+              <div
+                key={dateStr}
+                className={cn(
+                  "relative flex flex-col items-center justify-center w-full aspect-square rounded-md text-xs transition-colors cursor-pointer",
+                  isToday && "ring-1 ring-[#c4a87a]/40",
+                  record ? "bg-muted/40 hover:bg-muted/70" : "hover:bg-muted/10"
+                )}
+                onClick={() => setSelectedDate(selectedDate === dateStr ? null : dateStr)}
+              >
+                <span className={cn("text-[9px] leading-none", record ? "text-muted-foreground/70" : "text-muted-foreground/20")}>
+                  {d}
+                </span>
+                {record && <MoodIcon mood={record.mood} className="h-4 w-4 text-[#c4a87a] mt-0.5" />}
+                {dayEvents && dayEvents.length > 0 && (
+                  <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#c4a87a]" />
+                )}
+              </div>
+            )
+          }
+
+          return (
+            <div key={month}>
+              <div className="mb-2 flex items-center gap-2">
+                <h3 className="text-xs font-semibold text-foreground">{month}</h3>
+                <span className="text-[10px] text-muted-foreground/50">
+                  {moodCount}/{isCurrentMonth ? new Date().getDate() : daysInMonth} 天有记录
+                </span>
+              </div>
+              <div className="grid grid-cols-7 gap-1 mb-1">
+                {["日","一","二","三","四","五","六"].map((l) => (
+                  <div key={l} className="text-center text-[9px] text-muted-foreground/40 font-medium">{l}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">{cells}</div>
+
+              {selectedDate && selectedDate.startsWith(month) && (
+                <div className="mt-2 rounded-xl border border-[#c4a87a]/20 bg-[#c4a87a]/5 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-foreground">{selectedDate}</span>
+                    <button onClick={() => setSelectedDate(null)} className="rounded p-0.5 text-muted-foreground/50 hover:text-muted-foreground">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  {(() => {
+                    const mr = moodMap.get(selectedDate)
+                    return mr ? (
+                      <div className="flex items-center gap-2">
+                        <MoodIcon mood={mr.mood} className="h-5 w-5 text-[#c4a87a]" />
+                        <span className="text-xs text-muted-foreground/80">{mr.label}</span>
+                      </div>
+                    ) : null
+                  })()}
+                  {(() => {
+                    const evs = eventsByDate.get(selectedDate)
+                    return evs && evs.length > 0 ? (
+                      <div className="space-y-1">
+                        {evs.map((ev) => (
+                          <div key={ev.id} className="flex items-center gap-2 text-xs text-muted-foreground/80">
+                            <span className={cn("shrink-0 rounded px-1 py-0.5 text-[9px] font-medium", TYPE_STYLE[ev.type] || TYPE_STYLE.custom)}>
+                              {TYPE_LABEL[ev.type] || ev.type}
+                            </span>
+                            <span>{ev.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null
+                  })()}
+                  {!moodMap.get(selectedDate) && (!eventsByDate.get(selectedDate) || eventsByDate.get(selectedDate)!.length === 0) && (
+                    <p className="text-xs text-muted-foreground/50">无记录</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {/* ③ 即将到来 */}
+        {upcoming.length > 0 && (
+          <div className="rounded-xl border border-[#c4a87a]/20 bg-[#c4a87a]/5 p-3 space-y-2">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-[#c4a87a]" />
+              <span className="text-[10px] font-medium text-[#c4a87a]">即将到来</span>
+            </div>
+            {upcoming.map((e) => {
+              const diff = Math.ceil((new Date(e.date + "T00:00:00").getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+              const label = diff === 0 ? "今天" : diff === 1 ? "明天" : `${diff} 天后`
+              return (
+                <div key={e.id} className="flex items-center gap-2 rounded-lg bg-card/60 px-2.5 py-2">
+                  <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium", TYPE_STYLE[e.type] || TYPE_STYLE.custom)}>
+                    {TYPE_LABEL[e.type] || e.type}
+                  </span>
+                  <span className="flex-1 text-xs text-foreground/80">{e.title}</span>
+                  <span className={cn("text-[10px] font-medium", diff === 0 ? "text-[#c4a87a]" : "text-muted-foreground/50")}>{label}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* ④ + 添加日程 */}
         {!showCalendarForm ? (
           <button
             onClick={() => setShowCalendarForm(true)}
-            className="w-full rounded-xl border border-border/50 bg-card p-3 text-xs text-center text-muted-foreground hover:bg-muted/30 transition-colors"
+            className="w-full rounded-xl border border-[#c4a87a]/30 bg-transparent py-3 text-xs text-[#c4a87a]/70 hover:bg-[#c4a87a]/5 hover:text-[#c4a87a] transition-colors"
           >
-            + 新增日程
+            + 添加日程
           </button>
         ) : (
           <div className="rounded-xl border border-border/50 bg-card p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground">新增日程</span>
+              <span className="text-xs font-medium text-foreground">新日程</span>
               <button
                 onClick={() => { setShowCalendarForm(false); setFormTitle(""); setFormDate(""); setFormType("custom"); setFormRecurring(false); setFormNote("") }}
                 className="rounded-lg p-1 text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted transition-colors"
@@ -916,14 +1069,12 @@ export default function MemoriesPage() {
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
-
             <input
               value={formTitle}
               onChange={(e) => setFormTitle(e.target.value)}
               placeholder="日程标题"
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/40 focus:border-ring focus:outline-none"
             />
-
             <div className="flex gap-2">
               <input
                 type="date"
@@ -942,7 +1093,6 @@ export default function MemoriesPage() {
                 <option value="anniversary">纪念日</option>
               </select>
             </div>
-
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -952,7 +1102,6 @@ export default function MemoriesPage() {
               />
               <span className="text-[10px] text-muted-foreground/60">每年重复</span>
             </label>
-
             <textarea
               value={formNote}
               onChange={(e) => setFormNote(e.target.value)}
@@ -960,7 +1109,6 @@ export default function MemoriesPage() {
               rows={2}
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/40 focus:border-ring focus:outline-none resize-none"
             />
-
             <button
               onClick={handleAddCalendar}
               className="w-full rounded-lg bg-[#c4a87a] py-2 text-xs font-medium text-white hover:bg-[#b89a6a] transition-colors"
@@ -970,231 +1118,15 @@ export default function MemoriesPage() {
           </div>
         )}
 
-        {calendarEvents.length === 0 && !showCalendarForm ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 py-12">
-            <Calendar className="h-10 w-10 text-muted-foreground/30" />
+        {calendarEvents.length === 0 && (
+          <div className="flex flex-col items-center justify-center gap-3 py-12">
+            <CalendarHeart className="h-10 w-10 text-muted-foreground/30" />
             <p className="text-sm text-muted-foreground/60">还没有日程</p>
             <p className="text-xs text-muted-foreground/40 text-center">
-              点上方按钮添加考试、 deadline 或纪念日<br />砚迟会在聊天中自然提起
+              在首页选择心情、点底部按钮添加日程
             </p>
           </div>
-        ) : (
-          <>
-            {/* 即将到来 */}
-            {upcoming.length > 0 && (
-              <div className="rounded-xl border border-[#c4a87a]/20 bg-[#c4a87a]/5 p-3 space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-[#c4a87a]" />
-                  <span className="text-[10px] font-medium text-[#c4a87a]">即将到来</span>
-                </div>
-                {upcoming.map((e) => (
-                  <div
-                    key={e.id}
-                    className="flex items-center gap-2 rounded-lg bg-card/60 px-2.5 py-2"
-                  >
-                    <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium", typeColor(e.type))}>
-                      {CALENDAR_TYPE_LABELS[e.type] || e.type}
-                    </span>
-                    <span className="flex-1 text-xs text-foreground/80">{e.title}</span>
-                    <span className="text-[10px] text-muted-foreground/50">{e.date}</span>
-                    <button
-                      onClick={() => handleDeleteCalendar(e.id)}
-                      className="shrink-0 rounded p-1 text-muted-foreground/30 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* 日程列表 */}
-            {future.map((e) => (
-              <div
-                key={e.id}
-                className="flex items-center gap-2 rounded-xl border border-border/50 bg-card px-3 py-2.5"
-              >
-                <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium", typeColor(e.type))}>
-                  {CALENDAR_TYPE_LABELS[e.type] || e.type}
-                </span>
-                <span className="flex-1 text-xs text-foreground/80">{e.title}</span>
-                <span className="text-[10px] text-muted-foreground/50">{e.date}</span>
-                {e.recurring && <span className="text-[9px] text-muted-foreground/30">↻</span>}
-                <button
-                  onClick={() => handleDeleteCalendar(e.id)}
-                  className="shrink-0 rounded p-1 text-muted-foreground/30 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-
-            {/* 过往（置灰） */}
-            {past.map((e) => (
-              <div
-                key={e.id}
-                className="flex items-center gap-2 rounded-xl border border-border/20 bg-card/40 px-3 py-2.5 opacity-50"
-              >
-                <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium", typeColor(e.type))}>
-                  {CALENDAR_TYPE_LABELS[e.type] || e.type}
-                </span>
-                <span className="flex-1 text-xs text-muted-foreground/50 line-through">{e.title}</span>
-                <span className="text-[10px] text-muted-foreground/30">{e.date}</span>
-                {e.recurring && <span className="text-[9px] text-muted-foreground/20">↻</span>}
-                <button
-                  onClick={() => handleDeleteCalendar(e.id)}
-                  className="shrink-0 rounded p-1 text-muted-foreground/20 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-          </>
         )}
-      </div>
-    )
-  }
-
-  // ══ 心情 tab（日历格式）══════════════════════════════
-  function renderMoodTab() {
-    if (moodLoading) {
-      return (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#c4a87a] border-t-transparent" />
-        </div>
-      )
-    }
-
-    if (moodHistory.length === 0) {
-      return (
-        <div className="flex h-full flex-col items-center justify-center gap-3">
-          <Heart className="h-10 w-10 text-muted-foreground/30" />
-          <p className="text-sm text-muted-foreground/60">还没有心情记录</p>
-          <p className="text-xs text-muted-foreground/40 text-center">
-            在首页选择心情后<br />会出现在这里
-          </p>
-        </div>
-      )
-    }
-
-    // 构建日期 → 心情的快速查找
-    const moodMap = new Map<string, MoodRecord>()
-    for (const r of moodHistory) {
-      moodMap.set(r.date, r)
-    }
-
-    // 最近心情趋势横条
-    const recentSorted = [...moodHistory].sort((a, b) => a.date.localeCompare(b.date))
-    const recent = recentSorted.slice(-14)
-
-    // 确定要显示的月份范围：有记录的月份 → 当前月
-    const dates = moodHistory.map((r) => r.date).sort()
-    const earliest = dates[0] || new Date().toISOString().slice(0, 10)
-    const months: string[] = []
-    let cursor = earliest.slice(0, 7)
-    const today = new Date()
-    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`
-    while (cursor <= currentMonth) {
-      months.push(cursor)
-      const [y, m] = cursor.split("-").map(Number)
-      const next = new Date(y, m, 1)
-      cursor = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`
-    }
-
-    const DAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"]
-
-    return (
-      <div className="space-y-6 pb-4">
-        {/* 最近心情趋势横条 */}
-        {recent.length > 1 && (
-          <div className="rounded-xl border border-border/50 bg-card p-3">
-            <div className="mb-1.5 text-[10px] text-muted-foreground/50">最近 14 天</div>
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
-              {recent.map((r) => (
-                <div
-                  key={r.date}
-                  className="flex flex-col items-center gap-0.5 shrink-0"
-                  title={`${r.date} · ${r.label}`}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/40 text-sm">
-                    {r.emoji}
-                  </div>
-                  <span className="text-[8px] text-muted-foreground/40">{r.date.slice(5)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {months.map((month) => {
-          const [y, m] = month.split("-").map(Number)
-          const firstDay = new Date(y, m - 1, 1).getDay() // 0=Sun
-          const daysInMonth = new Date(y, m, 0).getDate()
-          const todayStr = new Date().toISOString().slice(0, 10)
-          const isCurrentMonth = month === currentMonth
-
-          // 该月的总数
-          const monthMoods = moodHistory.filter((r) => r.date.startsWith(month))
-          const moodCount = monthMoods.length
-
-          const cells: React.ReactNode[] = []
-          // 空白单元格（对齐首日）
-          for (let i = 0; i < firstDay; i++) {
-            cells.push(<div key={`empty-${i}`} className="w-full aspect-square" />)
-          }
-          // 日期单元格
-          for (let d = 1; d <= daysInMonth; d++) {
-            const dateStr = `${month}-${String(d).padStart(2, "0")}`
-            const record = moodMap.get(dateStr)
-            const isToday = dateStr === todayStr
-            cells.push(
-              <div
-                key={dateStr}
-                className={cn(
-                  "relative flex flex-col items-center justify-center w-full aspect-square rounded-md text-xs transition-colors",
-                  isToday && "ring-1 ring-[#c4a87a]/40",
-                  record
-                    ? "bg-muted/40 hover:bg-muted/70 cursor-default"
-                    : "hover:bg-muted/10"
-                )}
-                title={record ? `${dateStr} · ${record.label}` : dateStr}
-              >
-                <span className={cn(
-                  "text-[9px] leading-none",
-                  record ? "text-muted-foreground/70" : "text-muted-foreground/20"
-                )}>
-                  {d}
-                </span>
-                {record ? (
-                  <span className="text-base leading-none mt-0.5">{record.emoji}</span>
-                ) : null}
-              </div>
-            )
-          }
-
-          return (
-            <div key={month}>
-              <div className="mb-2 flex items-center gap-2">
-                <h3 className="text-xs font-semibold text-foreground">{month}</h3>
-                <span className="text-[10px] text-muted-foreground/50">
-                  {moodCount}/{isCurrentMonth ? new Date().getDate() : daysInMonth} 天有记录
-                </span>
-              </div>
-              {/* 星期行 */}
-              <div className="grid grid-cols-7 gap-1 mb-1">
-                {DAY_LABELS.map((label) => (
-                  <div key={label} className="text-center text-[9px] text-muted-foreground/40 font-medium">
-                    {label}
-                  </div>
-                ))}
-              </div>
-              {/* 日期网格 */}
-              <div className="grid grid-cols-7 gap-1">
-                {cells}
-              </div>
-            </div>
-          )
-        })}
       </div>
     )
   }
@@ -1211,8 +1143,6 @@ export default function MemoriesPage() {
         return data.notes
       case "discussions":
         return data.discussions
-      case "mood":
-        return []
       default:
         return []
     }
@@ -1240,7 +1170,7 @@ export default function MemoriesPage() {
     )
   }
 
-  const showSearch = tab !== "review" && tab !== "memorybank" && tab !== "mood" && tab !== "calendar"
+  const showSearch = tab !== "review" && tab !== "memorybank" && tab !== "life"
 
   return (
     <div className="flex h-full flex-col">
@@ -1277,8 +1207,7 @@ export default function MemoriesPage() {
             {/* 主 tab：始终显示 */}
             {([
               { key: "highlights" as const, label: "精选", icon: Sparkles },
-              { key: "mood" as const, label: "心情", icon: Heart },
-              { key: "calendar" as const, label: "日程", icon: Calendar },
+              { key: "life" as const, label: "生活", icon: CalendarHeart },
               { key: "memorybank" as const, label: "记忆库", icon: BookMarked },
               { key: "review" as const, label: "待审核", icon: Clock },
               { key: "notes" as const, label: "笔记", icon: FileText },
@@ -1357,15 +1286,13 @@ export default function MemoriesPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 scroll-smooth [&>:first-child]:min-h-full">
+      <div className="flex-1 overflow-y-auto px-4 pb-safe-bottom scroll-smooth [&>:first-child]:min-h-full">
         {tab === "review" ? (
           renderReviewTab()
         ) : tab === "memorybank" ? (
           renderMemoryBankTab()
-        ) : tab === "mood" ? (
-          renderMoodTab()
-        ) : tab === "calendar" ? (
-          renderCalendarTab()
+        ) : tab === "life" ? (
+          renderLifeTab()
         ) : tab === "notes" ? (
           renderNotesTab()
         ) : selectedItem ? (
@@ -1411,7 +1338,7 @@ export default function MemoriesPage() {
                   {selectedItem.date}
                   {(() => {
                     const m = moodHistory.find((r) => r.date === selectedItem.date)
-                    return m ? <span title={m.label}>{m.emoji}</span> : null
+                    return m ? <MoodIcon mood={m.mood} className="h-3.5 w-3.5 text-[#c4a87a]" title={m.label} /> : null
                   })()}
                 </p>
               )}

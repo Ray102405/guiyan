@@ -28,7 +28,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#0d0d0d",
+  themeColor: "#111108",
 }
 
 export default function RootLayout({
@@ -46,6 +46,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="归砚" />
         <link rel="apple-touch-startup-image" href="/icons/icon-512.png" />
+        <link href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" rel="stylesheet"/>
+        <style>{`@font-face{font-family:'HongLei';src:url('/fonts/鸿雷板书简体2.000.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:swap;}`}</style>
       </head>
       <body className="h-full antialiased">
         {/* Service Worker 注册 */}
